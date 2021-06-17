@@ -78,6 +78,12 @@ type Deleter interface {
 	ID() string
 }
 
+// Deleter by external ID field
+type ExternalDeleter interface {
+	Deleter
+	ExternalField() string
+}
+
 type dml struct {
 	session session.ServiceFormatter
 }
@@ -271,6 +277,8 @@ func (d *dml) upsertResponse(request *http.Request) (UpsertValue, error) {
 		}
 	case http.StatusNoContent:
 		isInsert = false
+	case http.StatusOK:
+		isInsert = false
 	default:
 		defer response.Body.Close()
 		var upsetErrs []sfdc.Error
@@ -300,7 +308,12 @@ func (d *dml) deleteCallout(deleter Deleter) error {
 }
 func (d *dml) deleteRequest(deleter Deleter) (*http.Request, error) {
 
-	url := d.session.ServiceURL() + objectEndpoint + deleter.SObject() + "/" + deleter.ID()
+	var url string
+	if ed, ok := deleter.(ExternalDeleter); ok {
+		url = d.session.ServiceURL() + objectEndpoint + ed.SObject() + "/" + ed.ExternalField() + "/" + ed.ID()
+	} else {
+		url = d.session.ServiceURL() + objectEndpoint + deleter.SObject() + "/" + deleter.ID()
+	}
 
 	request, err := http.NewRequest(http.MethodDelete, url, nil)
 
